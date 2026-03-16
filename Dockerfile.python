@@ -1,0 +1,12 @@
+FROM python:3.10-slim
+
+WORKDIR /app
+
+# 複製 Python 相依套件清單
+COPY requirements.txt ./
+
+# 安裝所需套件
+RUN pip install --no-cache-dir -r requirements.txt
+
+# 複製專案原始碼
+COPY . .

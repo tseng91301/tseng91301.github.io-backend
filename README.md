@@ -1,107 +1,76 @@
 # tseng91301.github.io-backend
 
-本專案為 [tseng91301.github.io](https://tseng91301.github.io) 的後端服務，主要處理前端的資料請求、時間預約功能，並透過 Discord Bot 提供通知與伺服器管理功能。
-
-## 目錄 (Table of Contents)
-
-- [專案架構 (Architecture)](#專案架構-architecture)
-- [功能介紹 (Features)](#功能介紹-features)
-- [建置與安裝 (Installation)](#建置與安裝-installation)
-- [運行方式 (Usage)](#運行方式-usage)
-- [專案目錄結構 (Directory Structure)](#專案目錄結構-directory-structure)
+本專案提供 [tseng91301.github.io](https://tseng91301.github.io) 的後端核心服務。架構已全面轉向 **Docker 容器化** 部署。
 
 ## 專案架構 (Architecture)
 
-本專案主要由以下幾個核心單元組成：
-1. **Express.js API 伺服器 (`local_server/`)**：提供 HTTP API 供前端呼叫，處理資料查詢（例如：`/cities`）以及接收使用者的預約請求（`/time_reservation`）。
-2. **Redis 訊息佇列**：作為 Express 伺服器與 Python Discord Bot 之間的溝通橋樑。當有新的預約請求時，Express 伺服器會將資料發布到 Redis `newReservation` 頻道。
-3. **Discord 通知 Bot (`discord_send_message.py`)**：在背景監聽 Redis 的 `newReservation` 頻道，一收到新預約資料，即時推播通知至指定的 Discord 頻道。
-4. **Discord 管理 Bot (`server_manage.py`)**：讓管理者在 Discord 中發送指令來控制伺服器，見[透過 Discord 機器人來控制 Node.js API 伺服器](#透過-discord-機器人來控制-nodejs-api-伺服器)。
+本專案採用容器化微服務架構，由以下服務組成：
 
-## 功能介紹 (Features)
+1.  **local-server (Node.js API)**: 使用 Express.js 提供 HTTP 接口，處理時間預約相關後端請求。
+2.  **backend-redis (Redis)**: 作為各服務間的資料暫存與傳輸媒介，利用 Pub/Sub 機制處理預約通知。
+3.  **discord-messenger (Python Bot)**: 負責監聽 Redis 頻道，並即時將預約資訊推播至 Discord。
+4.  **discord-manager (Python Bot)**: 提供 Discord 介面供管理者確認伺服器運作狀態。
 
-- **預約系統與通知**：透過 `/time_reservation` 接收預約資料，並利用 Redis Pub/Sub 機制即時觸發 Discord 機器人發送預約通知。
-- **Discord 遠端伺服器管理**：透過 Discord 機器人接收自訂文字指令，使用腳本動態控制後端 API 伺服器的啟動與停止。
-- **Tmux 背景運行**：透過 Shell Scripts 結合 `tmux` 來建立背景 Session，不僅讓服務常駐執行，也能隨時 Attach 查看服務日誌。
+## 外部檔案系統連結 (Persistent Data)
 
-## 建置與安裝 (Installation)
+為了確保資料持久化且易於存取，本專案預設將容器內的 `/data` 路徑與主機的 `./external_data/` 目錄進行綁定掛載 (Bind Mount)。
+- **用途**: 任何存放在容器中 `/data` 下的檔案都會自動同步到主機目錄，反之亦然。這非常適合儲存日誌、暫存檔或擴充配置。
 
-### 系統需求
-- **Node.js**: 建議 v14 以上
-- **Python**: 建議 v3.8 以上
-- **Redis**: 本地端需安裝並運行 Redis server (預設 port: `6379`)
-- **Tmux**: 終端機多路復用軟體，用於背景執行腳本
+---
 
-### 初始設定步聚
+## 建置與安裝 (Quick Start)
 
-1. **安裝 Node.js 依賴 (`local_server/`)**
-   ```bash
-   cd local_server
-   npm install
-   cd ..
-   ```
-
-2. **設定 Python 虛擬環境與安裝依賴**
-   ```bash
-   python -m venv venv
-   source venv/bin/activate
-   pip install -r requirements.txt
-   ```
-
-3. **設定環境變數**
-   * 建立或修改 `env/setenv.sh` (或相應 `.env` 檔)。
-   * 需準備的環境變數包括：
-     * `SERVER_MANAGE_DISCORD_BOT_TOKEN`
-     * `SERVER_MANAGE_DISCORD_BOT_CHANNEL_NUMBER`
-
-## 運行方式 (Usage)
-
-專案提供幾支便利的 Shell Scripts 用來管理服務：
-
-### 啟動 Node.js API 伺服器
+### 1. 準備環境變數
+將專案根目錄下的 `.env.example` 複製一份並命名為 `.env`：
 ```bash
-./start_local_server.sh
+cp .env.example .env
 ```
-* 這會在背景建立一個名為 `my-line-api-local-server` 的 tmux session，並在 `local_server` 目錄下執行 `node server.js`。
+編輯 `.env` 並填入您的 Discord Bot **Token** 與 **Channel ID**。
 
-### 停止 Node.js API 伺服器
+### 2. 啟動服務
+確保您的系統已安裝 Docker 與 Docker Compose (V2)，接著在根目錄執行：
 ```bash
-./stop_local_server.sh
+docker compose up -d --build
+```
+> **提示**: `--build` 參數能確保每次啟動時都會根據最新的程式碼與套件清單重新打包映像檔。
+
+---
+
+## 運行與管理 (Usage)
+
+### 檢視服務狀態
+```bash
+docker compose ps
 ```
 
-### 啟動 Discord Bot (通用與管理機器人)
-```bash
-./start_discord_bot.sh
-```
-* 這會啟動名為 `my-line-api-discord-bot` 的 tmux session。
-* Session 內會包含兩個 Window：一個執行 `server_manage.py`，用於伺服器管理；另一個確保啟動 `discord_send_message.py` 監聽 Redis 傳來的預約。
+### 查看日誌 (Logs)
+- 查看所有日誌: `docker compose logs -f`
+- 只看 Node API 伺服器日誌: `docker compose logs -f local-server`
 
-### 停止 Discord Bot
+### 重啟單一服務
+若您修改了 `local_server/` 下的程式碼並想立即生效：
 ```bash
-./stop_discord_bot.sh
+docker compose restart local-server
 ```
 
-### 透過 Discord 機器人來控制 Node.js API 伺服器
-* 到 Discord Bot 的聊天室中，輸入 `!trigger startserver` 來啟動 Node.js API 伺服器。
-* 到 Discord Bot 的聊天室中，輸入 `!trigger stopserver` 來停止 Node.js API 伺服器。
+### 停止整個環境
+```bash
+docker compose down
+```
+
+---
 
 ## 專案目錄結構 (Directory Structure)
 
 ```text
 tseng91301.github.io-backend/
-├── README.md                  # 本文件
-├── requirements.txt           # Python 套件依賴清單
-├── discord_bot/               # 自訂 Discord 機器人的核心模組目錄
-├── local_server/              # Node.js Express 伺服器目錄
-│   ├── server.js              # API 進入點
-│   └── package.json           # Node.js 套件依賴清單
-├── server_manage.py           # 負責管理（啟動/停止）API伺服器的 Discord Bot
-├── discord_send_message.py    # 監聽 Redis 並發送推播通知的 Discord Bot
-├── reddisReadDemo.py          # Redis 讀取測試示範程式
-├── start_local_server.sh      # 啟動 API 伺服器的 Tmux 腳本
-├── stop_local_server.sh       # 停止 API 伺服器的 Tmux 腳本
-├── start_discord_bot.sh       # 啟動 Discord 機器人的 Tmux 腳本
-├── stop_discord_bot.sh        # 停止 Discord 機器人的 Tmux 腳本
-├── env/                       # 環境變數設定檔（如 setenv.sh）
-└── venv/                      # Python 虛擬環境目錄
+├── docker-compose.yml       # Docker 服務統籌設定中心
+├── Dockerfile.node          # Node.js 服務建置腳本
+├── Dockerfile.python        # Python Bot 服務建置腳本
+├── .env                     # 環境變數設定檔 (需手動建立)
+├── external_data/           # 外部綁定掛載目錄 (與容器 /data 同步)
+├── requirements.txt         # Python 依賴清單
+├── discord_bot/             # Discord 機器人核心邏輯
+├── local_server/            # Express.js API 伺服器
+└── server_manage.py         # 伺服器管理機器人入口
 ```

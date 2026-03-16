@@ -1,0 +1,14 @@
+FROM node:20-alpine
+
+WORKDIR /app
+
+# 先複製 package.json 以利用 Docker 快取依賴安裝
+COPY local_server/package*.json ./
+RUN npm install
+
+# 複製其餘原始碼
+COPY local_server/ .
+
+EXPOSE 3273
+
+CMD ["node", "server.js"]

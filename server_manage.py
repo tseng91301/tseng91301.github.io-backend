@@ -8,11 +8,9 @@ async def handle_custom_event(message):
     if DEVELOP_MODE:
         print(f"🔔 收到自訂事件：{message}")
     if message == "startserver":
-        subprocess.Popen("./start_local_server.sh", shell=True)
-        server_manage_bot.send_message("✅ Server started")
+        server_manage_bot.send_message("ℹ️ Server is now managed by Docker and should be running continuously.")
     elif message == "stopserver":
-        subprocess.Popen("./stop_local_server.sh", shell=True)
-        server_manage_bot.send_message("✅ Server stopped")
+        server_manage_bot.send_message("ℹ️ Server is managed by Docker. Please use `docker-compose stop` on the host to stop it.")
 
 if __name__ == "__main__":
     server_manage_bot = DiscordBot(os.environ['SERVER_MANAGE_DISCORD_BOT_TOKEN'])

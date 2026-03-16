@@ -1,0 +1,65 @@
+version: '3.8'
+
+services:
+  redis:
+    image: redis:6.2-alpine
+    container_name: backend-redis
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+
+  local-server:
+    build:
+      context: .
+      dockerfile: Dockerfile.node
+    container_name: backend-node-server
+    ports:
+      - "3273:3273"
+    environment:
+      - REDIS_URL=redis://redis:6379
+    volumes:
+      - ./local_server:/app
+      # 防止主機目錄覆蓋掉容器內的 node_modules
+      - /app/node_modules
+      # 將外部空間掛載至 /data
+      - ./external_data:/data
+    restart: unless-stopped
+    depends_on:
+      - redis
+
+  discord-messenger:
+    build:
+      context: .
+      dockerfile: Dockerfile.python
+    container_name: backend-discord-messenger
+    environment:
+      - REDIS_HOST=redis
+    env_file:
+      - .env
+    volumes:
+      - .:/app
+      # 將外部空間掛載至 /data
+      - ./external_data:/data
+    command: python discord_send_message.py
+    restart: unless-stopped
+    depends_on:
+      - redis
+
+  discord-manager:
+    build:
+      context: .
+      dockerfile: Dockerfile.python
+    container_name: backend-discord-manager
+    env_file:
+      - .env
+    volumes:
+      - .:/app
+      # 將外部空間掛載至 /data
+      - ./external_data:/data
+    command: python server_manage.py
+    restart: unless-stopped
+
+volumes:
+  redis_data:

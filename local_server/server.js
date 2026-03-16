@@ -7,7 +7,8 @@ const cors = require('cors');
 const allowedOrigins = [
   'http://localhost:8081',
   'https://tseng91301.github.io',
-  'https://tseng91301.dpdns.org'
+  'https://tseng91301.dpdns.org',
+  'https://tseng91301-api.mingzhenju.dpdns.org'
 ];
 
 const corsOptions = {
@@ -87,12 +88,13 @@ app.post('/time_reservation', (req, res) => {
   }
   console.log(newReservation);
   (async () => {
-    const redis = createClient(); // 預設連 localhost:6379
+    const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
+    const redis = createClient({ url: redisUrl });
     await redis.connect();
 
     await redis.publish('newReservation', JSON.stringify(newReservation));
 
-    console.log('✅ 已儲存到 Redis');
+    console.log(`✅ 已儲存到 Redis (${redisUrl})`);
 
     await redis.disconnect();
   })();
